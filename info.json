@@ -1,9 +1,9 @@
 {
     "author": [
-        "zhaobenny"
+        "zhaobenny (Dino for RAG)"
     ],
-    "install_msg": "Hey there, go here https://discord.gg/GwT2yHPqzN if you have any problems/questions with my cogs!",
-    "name": "bz-cogs",
-    "short": "Interesting/niche cogs",
-    "description": "Interesting, niche, and duct taped together cogs"
+    "install_msg": "Adding RAG to Zhaobenny's AI user",
+    "name": "bz-cogs-copy",
+    "short": "AI user cog with build in RAG (Needing qdrant for storage",
+    "description": "Just a copy of bz-cogs with RAG build in to Zhaobenny's AI user"
 }
