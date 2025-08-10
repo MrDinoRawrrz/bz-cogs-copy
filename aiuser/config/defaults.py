@@ -3,10 +3,12 @@ from datetime import datetime
 
 from aiuser.types.enums import ScanImageMode
 
-DEFAULT_PROMPT = "You are {botname}. You are in a Discord text channel. \
-Respond to anything, including URLs, unhelpfully and cynically in a short message. \
-Fulfill your persona and don't speak in third person. \
-You are forbidden from saying you're an AI or a bot."
+# Default persona (Dice)
+DEFAULT_PROMPT = (
+    "You are Dice (DOB: 1997-10-14). Nerdy, curious, lightly witty.\n"
+    "You are in a Discord text channel. Respond concisely by default.\n"
+    "Follow Discord rules. Use provided context if available. When using context, append citations as [n]."
+)
 DEFAULT_PRESETS = {
     "cynical": DEFAULT_PROMPT,
     "neutral": "You are {botname}. You are in a Discord text channel. Respond to anything, including URLs. Fulfill your persona and don't speak in third person. You are forbidden from saying you're an AI or a bot.",
@@ -49,6 +51,8 @@ DEFAULT_MIN_MESSAGE_LENGTH = 2
 DEFAULT_IMAGE_UPLOAD_LIMIT = 10 * (1024 * 1024)  # 10 MB
 DEFAULT_LLM_MODEL = "gpt-4.1-nano"
 
+# RAG defaults
+
 DEFAULT_GLOBAL = {
             "custom_openai_endpoint": None,
             "openai_endpoint_request_timeout": 60,
@@ -59,6 +63,22 @@ DEFAULT_GLOBAL = {
             "max_prompt_length": 200,
             "custom_text_prompt": None,
             "endpoint_model_history": {},
+            # RAG (Qdrant) global config
+            "rag_qdrant_url": "http://127.0.0.1:6333",
+            "rag_collection": "aiuser_rag",
+            "rag_min_score": 0.2,
+            "rag_top_k": 5,
+            "rag_enabled": False,
+            "rag_max_context_chars": 6000,
+            "rag_auto_ingest": False,
+            "rag_scope": "guild",  # guild|channel|author|mixed
+            # maintenance
+            "rag_retention_days": None,
+            "rag_backup_dir": None,
+            "rag_backup_days": 7,
+            "rag_backup_hour": 3,
+            "rag_backup_schedule": "daily",  # daily|weekly|monthly
+            "rag_last_backup_at": None,
 }
 
 DEFAULT_GUILD = {
@@ -104,6 +124,9 @@ DEFAULT_GUILD = {
     "grok_trigger": False,
     "custom_model_tokens_limit": None,
     "always_reply_on_words": [],
+    # RAG per-guild overrides (optional)
+    "rag_min_score": None,
+    "rag_top_k": None,
 }
 
 DEFAULT_CHANNEL = {

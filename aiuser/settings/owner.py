@@ -192,6 +192,49 @@ class OwnerSettings(MixinMeta):
         )
         return await ctx.send(embed=embed)
 
+    @aiuserowner.group(name="ragbackup")
+    async def rag_backup_group(self, _):
+        """Configure RAG backup/retention"""
+        pass
+
+    @rag_backup_group.command(name="schedule")
+    async def rag_backup_schedule(self, ctx: commands.Context, schedule: str):
+        schedule = schedule.lower()
+        if schedule not in ["daily", "weekly", "monthly"]:
+            return await ctx.send(":warning: Use daily|weekly|monthly")
+        await self.config.rag_backup_schedule.set(schedule)
+        await ctx.send(f"Backup schedule set to `{schedule}`")
+
+    @rag_backup_group.command(name="hour")
+    async def rag_backup_hour(self, ctx: commands.Context, hour: int):
+        if hour < 0 or hour > 23:
+            return await ctx.send(":warning: Hour must be 0-23")
+        await self.config.rag_backup_hour.set(hour)
+        await ctx.send(f"Backup hour set to `{hour}` UTC")
+
+    @rag_backup_group.command(name="dir")
+    async def rag_backup_dir(self, ctx: commands.Context, *, directory: str = None):
+        await self.config.rag_backup_dir.set(directory)
+        await ctx.send(f"Backup directory set to `{directory}`")
+
+    @rag_backup_group.command(name="retentiondays")
+    async def rag_retention_days(self, ctx: commands.Context, days: int = None):
+        await self.config.rag_retention_days.set(days)
+        await ctx.send(f"Retention days set to `{days}`")
+
+    @rag_backup_group.command(name="now")
+    async def rag_backup_now(self, ctx: commands.Context):
+        try:
+            from aiuser.rag.client import RAG
+            rag = await RAG.create(self.config)
+            if not rag or not await self.config.rag_enabled():
+                return await ctx.send("RAG disabled or misconfigured")
+            res = await rag.create_snapshot(await self.config.rag_backup_dir())
+            await self.config.rag_last_backup_at.set(datetime.utcnow().isoformat())
+            await ctx.send(f"Snapshot triggered: `{bool(res)}`")
+        except Exception:
+            await ctx.send("Snapshot failed")
+
     @aiuserowner.command(name="exportconfig")
     async def export_config(self, ctx: commands.Context):
         """Exports the current config to a json file

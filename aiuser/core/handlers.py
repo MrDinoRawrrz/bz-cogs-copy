@@ -15,6 +15,7 @@ from aiuser.core.validators import is_valid_message
 from aiuser.response.dispatcher import dispatch_response
 from aiuser.types.abc import MixinMeta
 from aiuser.utils.utilities import is_embed_valid
+from aiuser.rag.client import RAG
 
 logger = logging.getLogger("red.bz_cogs.aiuser")
 
@@ -78,6 +79,13 @@ async def handle_message(cog: MixinMeta, message: discord.Message):
     if URL_PATTERN.search(ctx.message.content):
         ctx = await wait_for_embed(ctx)
 
+    # Optional RAG auto-ingest of triggering message (respects toggle)
+    try:
+        rag = await RAG.create(cog.config)
+        if rag and await rag.is_enabled() and await cog.config.rag_auto_ingest():
+            await rag.ingest_messages([message])
+    except Exception:
+        pass
     await dispatch_response(cog, ctx)
 
 

@@ -9,18 +9,18 @@ import tiktoken
 from discord import Message
 from redbot.core import commands
 
+from aiuser.config.constants import OPTIN_EMBED_TITLE
 from aiuser.config.defaults import DEFAULT_PROMPT
 from aiuser.config.models import OTHER_MODELS_LIMITS
-from aiuser.messages_list.converter.converter import MessageConverter
-from aiuser.messages_list.entry import MessageEntry
-from aiuser.messages_list.opt_view import OptView
+from aiuser.rag.client import RAG
 from aiuser.types.abc import MixinMeta
 from aiuser.types.enums import ScanImageMode
 from aiuser.utils.utilities import format_variables
+from .converter.converter import MessageConverter
+from .entry import MessageEntry
+from .opt_view import OptView
 
 logger = logging.getLogger("red.bz_cogs.aiuser")
-
-OPTIN_EMBED_TITLE = ":information_source: AI User Opt-In / Opt-Out"
 
 
 async def create_messages_list(
@@ -54,6 +54,7 @@ class MessagesList:
         self.tokens = 0
         self.model = None
         self.can_reply = True
+        self.rag_citations = None
 
     def __len__(self):
         return len(self.messages)
@@ -69,12 +70,15 @@ class MessagesList:
         except KeyError:
             self._encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
+        # Always use DEFAULT_PROMPT for consistency
+        bot_prompt = await format_variables(self.ctx, DEFAULT_PROMPT)
+        await self.add_system(bot_prompt)
+
+        # Add RAG context if enabled
+        await self._add_rag_context()
+
         if not prompt:  # jank
             await self.add_msg(self.init_message)
-
-        bot_prompt = prompt or await self._pick_prompt()
-
-        await self.add_system(await format_variables(self.ctx, bot_prompt))
 
         if await self._check_if_inital_img():
             self.model = await self.config.guild(self.guild).scan_images_model()
@@ -96,20 +100,28 @@ class MessagesList:
             return False
 
     async def _pick_prompt(self):
-        author = self.init_message.author
-        role_prompt = None
+        # Always return DEFAULT_PROMPT for consistency
+        return DEFAULT_PROMPT
 
-        for role in author.roles:
-            if role.id in (await self.config.all_roles()):
-                role_prompt = await self.config.role(role).custom_text_prompt()
-                break
+    async def _add_rag_context(self):
+        """Add RAG context based on the user's message and conversation history"""
+        try:
+            rag = await RAG.create(self.config)
+            if not rag or not await rag.is_enabled():
+                return
 
-        return (await self.config.member(self.init_message.author).custom_text_prompt()
-                or role_prompt
-                or await self.config.channel(self.init_message.channel).custom_text_prompt()
-                or await self.config.guild(self.guild).custom_text_prompt()
-                or await self.config.custom_text_prompt()
-                or DEFAULT_PROMPT)
+            # Get context from the user's message and recent conversation
+            query = self.init_message.content or ""
+            if not query.strip():
+                return
+
+            # Retrieve relevant context from RAG
+            context, citations = await rag.retrieve_context(self.ctx, query)
+            if context:
+                await self.add_context_block(context, citations)
+        except Exception:
+            # Silently fail if RAG is not available
+            pass
 
     async def check_if_add(self, message: Message, force: bool = False):
         if self.tokens > self.token_limit:
@@ -173,6 +185,12 @@ class MessagesList:
         entry = MessageEntry("system", content)
         self.messages.insert(index or 0, entry)
         await self._add_tokens(content)
+
+    async def add_context_block(self, context_text: str, citations: list[str]):
+        if not context_text:
+            return
+        await self.add_system(f"Context (retrieved):\n{context_text}")
+        self.rag_citations = citations or None
 
     async def add_assistant(self, content: str = "", index: int = None, tool_calls: list = []):
         if self.tokens > self.token_limit:

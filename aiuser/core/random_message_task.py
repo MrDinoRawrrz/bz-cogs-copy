@@ -1,4 +1,5 @@
 import datetime
+from datetime import timezone
 import logging
 import random
 
@@ -36,18 +37,49 @@ class RandomMessageTask(MixinMeta):
             if not await self.check_if_valid_for_random_message(guild, last):
                 return
 
-            topics = await self.config.guild(guild).random_messages_prompts() or None
-            if not topics:
-                return logger.warning(
-                    f"No random message topics were found in {guild.name}, skipping")
+            # Build context from last 30 messages; pick last 10 relevant to conversation
+            history_msgs = [m async for m in channel.history(limit=30)]
+            # Filter out bot messages and empty content
+            convo = [m for m in history_msgs if not m.author.bot and (m.content or m.attachments or m.stickers)]
+            convo.sort(key=lambda m: m.created_at, reverse=True)
+            convo = convo[:10]
 
-            prompt = await self.config.channel(channel).custom_text_prompt() or await self.config.guild(guild).custom_text_prompt() or await self.config.custom_text_prompt() or DEFAULT_PROMPT
+            # Time-based greeting if a user reappears after 4 hours
+            greeting = None
+            try:
+                now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=2), name="Europe/Amsterdam"))
+            except Exception:
+                now = datetime.datetime.now(tz=timezone.utc)
+            if len(history_msgs) > 1:
+                last_user_msg = next((m for m in history_msgs if not m.author.bot), None)
+                if last_user_msg:
+                    delta = now - last_user_msg.created_at.replace(tzinfo=timezone.utc)
+                    if delta.total_seconds() >= 4 * 3600:
+                        hour = now.hour
+                        if 5 <= hour < 12:
+                            greeting = "Good morning"
+                        elif 12 <= hour < 18:
+                            greeting = "Good afternoon"
+                        else:
+                            greeting = "Good evening"
+
+            # Always use DEFAULT_PROMPT for consistency
+            prompt = await format_variables(ctx, DEFAULT_PROMPT)
             messages_list = await create_messages_list(self, ctx, prompt=prompt, history=False)
-            topic = await format_variables(
-                ctx, topics[random.randint(0, len(topics) - 1)])
             logger.debug(
-                f"Sending random message to #{channel.name} at {guild.name}")
-            await messages_list.add_system(f"Using the persona above, follow these instructions: {topic}", index=len(messages_list) + 1)
+                f"Sending contextual random message to #{channel.name} at {guild.name}")
+            # Inject short instruction to respond related to recent conversation
+            recent_summary_instruction = "Respond briefly and naturally about the ongoing conversation based on the recent messages. Avoid introducing unrelated topics."
+            if greeting:
+                recent_summary_instruction += f" If someone is just arriving after a while, start with '{greeting}'."
+            await messages_list.add_system(recent_summary_instruction, index=len(messages_list) + 1)
+
+            # Add the 10-message context explicitly (as user content)
+            for msg in reversed(convo):
+                try:
+                    await messages_list.add_msg(msg, index=len(messages_list) + 1, force=True)
+                except Exception:
+                    continue
             messages_list.can_reply = False
 
             return await dispatch_response(self, ctx, messages_list)

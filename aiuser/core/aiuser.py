@@ -1,6 +1,6 @@
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 import discord
 from openai import AsyncOpenAI
@@ -21,6 +21,7 @@ from aiuser.messages_list.entry import MessageEntry
 from aiuser.settings.base import Settings
 from aiuser.types.abc import CompositeMetaClass
 from aiuser.utils.cache import Cache
+from aiuser.rag.client import RAG
 
 from .openai_utils import setup_openai_client
 
@@ -75,11 +76,82 @@ class AIUser(
             self.override_prompt_start_time[test_guild] = datetime.now()
 
         self.random_message_trigger.start()
+        # Start periodic backup/retention task
+        try:
+            from discord.ext import tasks
+
+            @tasks.loop(minutes=15)
+            async def rag_maintenance():
+                try:
+                    rag = await RAG.create(self.config)
+                    if not rag or not await self.config.rag_enabled():
+                        return
+                    # Retention
+                    days = await self.config.rag_retention_days()
+                    if days:
+                        for guild in self.bot.guilds:
+                            await rag.delete_older_than(days, guild_id=guild.id)
+
+                    # Backups
+                    backup_dir = await self.config.rag_backup_dir()
+                    if not backup_dir:
+                        return
+                    schedule = (await self.config.rag_backup_schedule()) or "daily"
+                    hour = await self.config.rag_backup_hour()
+                    last = await self.config.rag_last_backup_at()
+                    now = datetime.now(tz=timezone.utc)
+                    should_run = False
+                    if schedule == "daily":
+                        should_run = last is None or now.strftime("%Y-%m-%d") != last[:10]
+                    elif schedule == "weekly":
+                        should_run = last is None or (now - datetime.fromisoformat(last)).days >= 7
+                    elif schedule == "monthly":
+                        should_run = last is None or now.month != datetime.fromisoformat(last).month or now.year != datetime.fromisoformat(last).year
+                    if should_run and now.hour == hour:
+                        res = await rag.create_snapshot(backup_dir)
+                        await self.config.rag_last_backup_at.set(now.isoformat())
+                except Exception:
+                    pass
+
+            self._rag_maintenance = rag_maintenance
+            self._rag_maintenance.start()
+        except Exception:
+            pass
+
+    @commands.command(name="dice")
+    @commands.guild_only()
+    async def dice_command(self, ctx: commands.Context, *, prompt: str):
+        """Ask Dice (RAG-powered)."""
+        from aiuser.config.defaults import DEFAULT_PROMPT
+        from aiuser.messages_list.messages import create_messages_list
+        from aiuser.response.dispatcher import dispatch_response
+        try:
+            messages_list = await create_messages_list(self, ctx, prompt=DEFAULT_PROMPT, history=False)
+            # Retrieve RAG context
+            context_text, citations = None, None
+            try:
+                from aiuser.rag.client import RAG
+                rag = await RAG.create(self.config)
+                if rag and await rag.is_enabled():
+                    context_text, citations = await rag.retrieve_context(ctx, prompt)
+            except Exception:
+                context_text, citations = None, None
+            if context_text:
+                await messages_list.add_context_block(context_text, citations)
+            # Add the user prompt explicitly
+            await messages_list.add_system("Answer concisely.", index=len(messages_list) + 1)
+            await dispatch_response(self, ctx, messages_list)
+        except Exception:
+            await ctx.react_quietly("⚠️", message="Dice failed")
 
     async def cog_unload(self):
         if self.openai_client:
             await self.openai_client.close()
         self.random_message_trigger.cancel()
+        try:
+            self._rag_maintenance.cancel()
+        except Exception:
+            pass
 
     async def red_delete_data_for_user(self, *, requester, user_id: int):
         for guild in self.bot.guilds:
@@ -110,3 +182,14 @@ class AIUser(
     @commands.Cog.listener()
     async def on_message_without_command(self, message: discord.Message):
         await handle_message(self, message)
+
+    @commands.Cog.listener()
+    async def on_message_delete(self, message: discord.Message):
+        try:
+            if not message or not message.guild or not message.author or message.author.bot:
+                return
+            rag = await RAG.create(self.config)
+            if rag and await rag.is_enabled():
+                await rag.delete_messages_by_ids([message.id])
+        except Exception:
+            pass

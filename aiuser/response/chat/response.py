@@ -91,4 +91,10 @@ async def create_chat_response(cog: MixinMeta, ctx: commands.Context, messages_l
     if not cleaned_response:
         return False
 
+    # Append RAG citations if present
+    citations = getattr(messages_list, "rag_citations", None)
+    if citations:
+        footnotes = "\n\n" + "\n".join([f"[{i+1}] {c}" for i, c in enumerate(citations)])
+        cleaned_response += footnotes
+
     return await send_response(ctx, cleaned_response, messages_list.can_reply)

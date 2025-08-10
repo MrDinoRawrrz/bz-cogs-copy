@@ -13,6 +13,7 @@ from aiuser.settings.image_scan import ImageScanSettings
 from aiuser.settings.owner import OwnerSettings
 from aiuser.settings.prompt import PromptSettings
 from aiuser.settings.random_message import RandomMessageSettings
+from aiuser.settings.rag import RagSettings
 from aiuser.settings.response import ResponseSettings
 from aiuser.settings.triggers import TriggerSettings
 from aiuser.settings.utilities import (
@@ -39,6 +40,7 @@ class Settings(
     TriggerSettings,
     OwnerSettings,
     RandomMessageSettings,
+    RagSettings,
     FunctionCallingSettings,
     MixinMeta,
 ):
@@ -394,7 +396,7 @@ class Settings(
     async def optout(self, ctx: commands.Context):
         """Opt out of sending your messages / images to OpenAI or another endpoint (bot-wide)
 
-        This will prevent the bot from replying to your messages or using your messages.
+        This will prevent the bot from replying to your messages or using your messages. Also removes your indexed data from RAG.
         """
         optout = await self.config.optout()
         if ctx.author.id in optout:
@@ -405,7 +407,15 @@ class Settings(
             await self.config.optin.set(optin)
         optout.append(ctx.author.id)
         await self.config.optout.set(optout)
-        await ctx.send("You are now opted out bot-wide")
+        # Attempt to delete from RAG index
+        try:
+            from aiuser.rag.client import RAG
+            rag = await RAG.create(self.config)
+            if rag:
+                await rag.delete_user(ctx.author.id)
+        except Exception:
+            pass
+        await ctx.send("You are now opted out bot-wide (RAG data removed if enabled)")
 
     @aiuser.command(name="optinbydefault", alias=["optindefault"])
     @checks.admin_or_permissions(manage_guild=True)

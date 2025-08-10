@@ -208,3 +208,29 @@ Bot owners may also want to set custom parameters (per server). See:
 ```
 [p]aiuser response parameters
 ```
+
+---
+
+## RAG (Qdrant) 📚
+
+This cog can index messages, URLs, and files into a local Qdrant vector store and retrieve relevant context for concise, grounded answers via the `!aiuser dice` command.
+
+- Enable and configure:
+  - `!aiuser rag enable`
+  - `!aiuser rag qdrant http://127.0.0.1:6333 aiuser_rag`
+  - `!aiuser rag minscore 0.2`
+  - `!aiuser rag topk 5`
+  - `!aiuser rag autoingest on|off`
+  - `!aiuser rag scope guild|channel|author|mixed`
+- Ingestion:
+  - `!aiuser rag addhere 200` — index recent messages in channel
+  - `!aiuser rag addurl <url>` — index a web page
+  - Attach a file then run `!aiuser rag addfile` — index .txt/.md/.pdf/.docx
+- Retrieval:
+  - Ask Dice: `!aiuser dice <prompt>`
+  - Inspect: `!aiuser rag search <query>`
+- Health and stats:
+  - Owners: `!aiuserowner health`
+  - Admins: `!aiuser rag health`, `!aiuser rag stats`
+
+Users can withdraw consent with `!aiuser optout`, which also deletes their indexed RAG data. You can delete specific items with `!aiuser privacy delete-mine` and export your data with `!aiuser privacy export-mine`.
