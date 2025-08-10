@@ -72,7 +72,7 @@ class AIUser(
 
         if logger.isEnabledFor(logging.DEBUG):
             # for development
-            test_guild = 744802856074346556
+            test_guild = 1401985512998436935
             self.override_prompt_start_time[test_guild] = datetime.now()
 
         self.random_message_trigger.start()

@@ -213,7 +213,7 @@ Bot owners may also want to set custom parameters (per server). See:
 
 ## RAG (Qdrant) 📚
 
-This cog can index messages, URLs, and files into a local Qdrant vector store and retrieve relevant context for concise, grounded answers via the `!aiuser dice` command.
+This cog can index messages, URLs, and files into a local Qdrant vector store and retrieve relevant context for concise, grounded answers based on actual chat history.
 
 - Enable and configure:
   - `!aiuser rag enable`

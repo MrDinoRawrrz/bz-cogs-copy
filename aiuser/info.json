@@ -21,7 +21,7 @@
         "aiohttp",
         "gradio_client",
         "qdrant-client>=1.9.0",
-        "sentence-transformers>=2.7.0",
+        "sentence-transformers>=2.2.2",
         "pypdf>=4.2.0",
         "python-docx>=1.1.2"
     ],
