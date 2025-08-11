@@ -11,7 +11,7 @@ import aiohttp
 import re
 from discord import Message
 from qdrant_client import QdrantClient
-from qdrant_client.conversions.common_types import Filter, FieldCondition, MatchValue
+from qdrant_client.http.models import Filter, FieldCondition, MatchValue
 from qdrant_client.http import models as rest
 from redbot.core import Config, commands
 from sentence_transformers import SentenceTransformer
