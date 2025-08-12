@@ -5,7 +5,7 @@ from aiuser.types.abc import MixinMeta
 
 
 class RagSettings(MixinMeta):
-    @commands.group()
+    @commands.group(aliases=["ai_user_rag"])
     @checks.is_owner()
     async def aiuser_owner_group(self, _):
         """AIUser owner/admin commands"""
