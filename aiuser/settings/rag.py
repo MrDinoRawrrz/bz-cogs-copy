@@ -144,11 +144,6 @@ class RagSettings(MixinMeta):
         except Exception:
             await ctx.send("Search failed")
 
-    @commands.group(name="aiuser")
-    async def aiuser_group(self, _):
-        """AIUser user commands"""
-        pass
-
     @aiuser_group.group(name="privacy")
     async def privacy(self, _):
         """User privacy commands"""
