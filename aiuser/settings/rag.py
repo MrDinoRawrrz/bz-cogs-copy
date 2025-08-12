@@ -1,21 +1,13 @@
 import discord
 from redbot.core import checks, commands
-from aiuser.settings.base import aiuser
 
 from aiuser.types.abc import MixinMeta
 
 
 class RagSettings(MixinMeta):
-    @commands.group(aliases=["ai_user_rag"])
-    @checks.is_owner()
-    async def aiuser(self, _):
-        """AIUser owner/admin commands"""
-        pass
-
-    @aiuser.group(name="rag")
+    @commands.group(name="rag")
     async def rag(self, _):
         """RAG (Qdrant) configuration and operations"""
-        """RAG configuration commands"""
         pass
 
     @rag.command(name="enable")
@@ -65,10 +57,13 @@ class RagSettings(MixinMeta):
             rag = await RAG.create(self.config)
             if not rag:
                 return await ctx.send("RAG disabled or misconfigured")
-            ok, version = await rag.health()
-            await ctx.send(f"Qdrant: {'OK' if ok else 'DOWN'} (v{version or 'unknown'})")
+            healthy, error = await rag.health()
+            if healthy:
+                await ctx.send("✅ RAG is healthy")
+            else:
+                await ctx.send(f"❌ RAG health check failed: {error}")
         except Exception:
-            await ctx.send("Qdrant: error")
+            await ctx.send("❌ RAG health check failed")
 
     @rag.command(name="stats")
     async def rag_stats(self, ctx: commands.Context):
@@ -77,30 +72,31 @@ class RagSettings(MixinMeta):
             rag = await RAG.create(self.config)
             if not rag:
                 return await ctx.send("RAG disabled or misconfigured")
-            s = await rag.stats()
-            await ctx.send(f"RAG stats: `{s}`")
+            stats = await rag.stats()
+            embed = discord.Embed(title="RAG Statistics", color=await ctx.embed_color())
+            embed.add_field(name="Total Points", value=str(stats.get("total_points", 0)))
+            embed.add_field(name="Collections", value=str(stats.get("collections", 0)))
+            await ctx.send(embed=embed)
         except Exception:
-            await ctx.send("Failed to fetch stats")
+            await ctx.send("Failed to get RAG stats")
 
     @rag.command(name="addhere")
     async def rag_add_here(self, ctx: commands.Context, limit: int = 200):
-        """Ingest recent messages in this channel into RAG"""
+        """Add recent messages from this channel to RAG"""
         try:
             from aiuser.rag.client import RAG
             rag = await RAG.create(self.config)
             if not rag:
                 return await ctx.send("RAG disabled or misconfigured")
-            msgs = [
-                m async for m in ctx.channel.history(limit=limit)
-                if not m.author.bot and m.content and m.content.strip()
-            ]
-            count = await rag.ingest_messages(msgs)
-            await ctx.send(f"Indexed `{count}` chunks from {len(msgs)} messages")
+            messages = [m async for m in ctx.channel.history(limit=limit)]
+            cnt = await rag.ingest_messages(messages)
+            await ctx.send(f"Indexed `{cnt}` chunks from `{limit}` messages")
         except Exception:
-            await ctx.send("Failed to ingest messages")
+            await ctx.send("Failed to add messages to RAG")
 
     @rag.command(name="addurl")
     async def rag_add_url(self, ctx: commands.Context, url: str):
+        """Add content from a URL to RAG"""
         try:
             from aiuser.rag.client import RAG
             rag = await RAG.create(self.config)
@@ -109,7 +105,7 @@ class RagSettings(MixinMeta):
             cnt = await rag.ingest_url(ctx, url)
             await ctx.send(f"Indexed `{cnt}` chunks from URL")
         except Exception:
-            await ctx.send("Failed to ingest URL")
+            await ctx.send("Failed to add URL to RAG")
 
     @rag.command(name="addfile")
     async def rag_add_file(self, ctx: commands.Context):
@@ -145,7 +141,8 @@ class RagSettings(MixinMeta):
         except Exception:
             await ctx.send("Search failed")
 
-    @aiuser.group(name="privacy")
+    # Change privacy commands to use a separate command group to avoid conflicts
+    @commands.group(name="privacy")
     async def privacy(self, _):
         """User privacy commands"""
         pass
@@ -240,13 +237,11 @@ class RagSettings(MixinMeta):
             if "--channel" in flags and ctx.message.channel_mentions:
                 channel = ctx.message.channel_mentions[0].id
             data = await rag.export_all(guild_id=ctx.guild.id, user_id=user, channel_id=channel)
-            if not data:
-                return await ctx.send("No data found for export")
             import json
             from io import BytesIO
             buf = BytesIO(json.dumps(data, indent=2).encode("utf-8"))
-            name = f"rag_export_g{ctx.guild.id}{'_u'+str(user) if user else ''}{'_c'+str(channel) if channel else ''}.json"
-            await ctx.send(file=discord.File(buf, filename=name))
+            await ctx.author.send(file=discord.File(buf, filename=f"rag_export_{ctx.guild.id}.json"))
+            await ctx.send("DM'd your export.")
         except Exception:
             await ctx.send("Export failed")
 
