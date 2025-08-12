@@ -1,5 +1,6 @@
 import discord
 from redbot.core import checks, commands
+from aiuser.settings.base import aiuser
 
 from aiuser.types.abc import MixinMeta
 
@@ -7,11 +8,11 @@ from aiuser.types.abc import MixinMeta
 class RagSettings(MixinMeta):
     @commands.group(aliases=["ai_user_rag"])
     @checks.is_owner()
-    async def aiuser_owner_group(self, _):
+    async def aiuser(self, _):
         """AIUser owner/admin commands"""
         pass
 
-    @aiuser_owner_group.group(name="rag")
+    @aiuser.group(name="rag")
     async def rag(self, _):
         """RAG (Qdrant) configuration and operations"""
         """RAG configuration commands"""
@@ -144,7 +145,7 @@ class RagSettings(MixinMeta):
         except Exception:
             await ctx.send("Search failed")
 
-    @aiuser_group.group(name="privacy")
+    @aiuser.group(name="privacy")
     async def privacy(self, _):
         """User privacy commands"""
         pass
